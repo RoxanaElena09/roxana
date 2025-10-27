@@ -1,0 +1,26 @@
+name: PHP CS Fixer
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  cs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.composer/cache
+            vendor
+          key: composer-cs-${{ hashFiles('**/composer.lock') }}
+          restore-keys: composer-cs-
+      - run: composer install --no-interaction --prefer-dist
+      - name: Check style (dry-run)
+        run: vendor/bin/php-cs-fixer fix --allow-risky=yes --dry-run --diff

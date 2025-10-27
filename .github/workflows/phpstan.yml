@@ -1,0 +1,26 @@
+name: PHPStan
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  phpstan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.composer/cache
+            vendor
+          key: composer-phpstan-${{ hashFiles('**/composer.lock') }}
+          restore-keys: composer-phpstan-
+      - run: composer install --no-interaction --prefer-dist
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse --no-progress
