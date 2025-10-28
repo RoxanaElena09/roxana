@@ -2,8 +2,7 @@ name: Deploy via SSH
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
 
 jobs:
   deploy:
@@ -13,13 +12,36 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH
+      - name: Setup SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Deploy to server
+      - name: Disable host key prompt
         run: |
-          ssh -o StrictHostKeyChecking=no roxana@lesacteursduweb.fr "
-            echo "yesman"
-          "
+          mkdir -p ~/.ssh
+          printf "Host lesacteursduweb.fr\n  StrictHostKeyChecking no\n" >> ~/.ssh/config
+
+      # 🔎 Test SSH (doit afficher YES_OK)
+      - name: SSH smoke test
+        run: |
+          ssh -i ~/.ssh/gh_actions_lesacteurs roxana@lesacteursduweb.fr "echo YES_OK" || true
+          ssh roxana@lesacteursduweb.fr "echo YES_OK"
+
+      # 🚚 Déploiement par rsync
+      - name: Sync files to server (rsync)
+        run: |
+          RSYNC_EXCLUDES="--exclude .git --exclude .github --exclude node_modules --exclude vendor --exclude tests"
+          rsync -az --delete $RSYNC_EXCLUDES ./ roxana@lesacteursduweb.fr:~/www_github/
+
+      # 🔧 Post-deploy: composer si présent
+      - name: Post-deploy (Composer si présent)
+        run: |
+          ssh roxana@lesacteursduweb.fr << 'EOF'
+            set -e
+            cd ~/www_github
+            if [ -f composer.json ] && command -v composer >/dev/null 2>&1; then
+              composer install --no-dev --no-interaction --prefer-dist
+            fi
+          EOF
+
