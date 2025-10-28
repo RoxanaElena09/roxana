@@ -18,24 +18,8 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Disable host key prompt
+      - name: Deploy to server
         run: |
-          mkdir -p ~/.ssh
-          echo "Host lesacteursduweb.fr
-            StrictHostKeyChecking no
-          " >> ~/.ssh/config
-
-      - name: Sync files to server (rsync)
-        run: |
-          RSYNC_EXCLUDES="--exclude .git --exclude .github --exclude node_modules --exclude vendor --exclude tests"
-          rsync -az --delete $RSYNC_EXCLUDES ./ ${{ secrets.SSH_USER }}@lesacteursduweb.fr:~/www_github/
-
-      - name: Post-deploy (composer si besoin)
-        run: |
-          ssh ${{ secrets.SSH_USER }}@lesacteursduweb.fr << 'EOF'
-            set -e
-            cd ~/www_github
-            if [ -f composer.json ] && command -v composer >/dev/null 2>&1; then
-              composer install --no-dev --no-interaction --prefer-dist
-            fi
-          EOF
+          ssh -o StrictHostKeyChecking=no roxana@lesacteursduweb.fr "
+            echo "yesman"
+          "
