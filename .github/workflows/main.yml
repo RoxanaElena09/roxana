@@ -1,0 +1,103 @@
+name: CI + CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  phpunit:
+    name: PHPUnit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Installation de PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, pdo, pdo_mysql
+          tools: composer
+
+      - name: Installation des dépendances
+        run: composer install --no-progress --no-suggest --no-interaction
+
+      - name: Lancement des tests PHPUnit
+        run: vendor/bin/phpunit --testdox
+
+  phpstan:
+    name: PHPStan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Installation de PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer
+
+      - name: Installation des dépendances
+        run: composer install --no-progress --no-suggest --no-interaction
+
+      - name: Analyse PHPStan
+        run: vendor/bin/phpstan analyse --no-progress
+
+  phpcsfixer:
+    name: PHP CS Fixer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Installation de PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer
+
+      - name: Installation des dépendances
+        run: composer install --no-progress --no-suggest --no-interaction
+
+      - name: Vérification du style de code
+        run: vendor/bin/php-cs-fixer fix --dry-run --diff
+
+  deploy:
+    name: Déploiement sur lesacteursduweb.fr
+    runs-on: ubuntu-latest
+    needs: [phpunit, phpstan, phpcsfixer]
+    if: ${{ success() }}
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Configuration SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Désactiver la vérification d’hôte
+        run: |
+          mkdir -p ~/.ssh
+          echo "Host lesacteursduweb.fr
+            StrictHostKeyChecking no
+          " >> ~/.ssh/config
+
+      - name: Déploiement via rsync
+        run: |
+          RSYNC_EXCLUDES="--exclude .git --exclude .github --exclude node_modules --exclude vendor --exclude tests --exclude .php-cs-fixer.cache"
+          rsync -az --delete $RSYNC_EXCLUDES ./ roxana@lesacteursduweb.fr:~/www_github/
+
+      - name: Post-deploy (Composer si présent)
+        run: |
+          ssh roxana@lesacteursduweb.fr << 'EOF'
+            set -e
+            cd ~/www_github
+            if [ -f composer.json ] && command -v composer >/dev/null 2>&1; then
+              composer install --no-dev --no-interaction --prefer-dist
+            fi
+          EOF
